@@ -87,7 +87,9 @@ class MainWindow(QtWidgets.QMainWindow):
             scene.addItem(item)
             self.graphicsView.setScene(scene)
             qqimg=(Image.open(self.path).convert('L')).toqpixmap()
+            self.noisy_image = Image.open(self.path).convert('L')
             self.unfilteredImage.clear()
+            self.filteredImage.clear()
             self.unfilteredImage.setPixmap(qqimg) 
 
             # get number of channels
@@ -190,7 +192,23 @@ class MainWindow(QtWidgets.QMainWindow):
         canvas.setGeometry(0, 0, 500, 500)
         scene.addWidget(canvas)
         self.graphicsView.setScene(scene)
-        self.unfilteredImage.setScene(scene)
+
+        # view image in filtering tab
+        ds = dicom.dcmread(self.path)
+        new= ds.pixel_array.astype(float)
+        scaled_image=(np.maximum(new, 0)/new.max())*255.0
+        
+        scaled_image=np.uint8(scaled_image)
+        image_array_1d=np.asarray(scaled_image)
+        width= image_array_1d.shape[1]
+        height= image_array_1d.shape[0]
+        img=Image.fromarray(scaled_image)
+
+        qqimg=(img.toqpixmap())
+        self.noisy_image = qqimg
+        self.unfilteredImage.clear()
+        self.filteredImage.clear()
+        self.unfilteredImage.setPixmap(qqimg) 
         
     def nearest_neighbour_interpolation(self, path, factor):
         try:
@@ -719,102 +737,184 @@ class MainWindow(QtWidgets.QMainWindow):
             msg.exec_()
 
     def filter(self, path):
-        # create kernel
-        kernel_size= self.kernelSize.value()
-        kFactor= self.kFactor.value()
-        kernel_value= 1/(kernel_size*kernel_size) 
-        kernel = np.full((kernel_size, kernel_size), kernel_value)
+        try:
+            # create kernel
+            kernel_size= self.kernelSize.value()
+            kFactor= self.kFactor.value()
+            kernel_value= 1/(kernel_size*kernel_size) 
+            kernel = np.full((kernel_size, kernel_size), kernel_value)
 
-        # image original size
-        image=Image.open(self.path).convert('L') 
-        original_image_width=image.width
-        original_image_height=image.height
-        original_image_array=np.asarray(image)
-        # image padded size
-        padded_image_width=original_image_width + kernel_size -1
-        padded_image_height=image.height + kernel_size -1
-        # padded image
-        padded_image_array = np.pad(original_image_array, kernel_size//2)
-        filtered_image_array = np.zeros((padded_image_height, padded_image_width))
-        for i in range(original_image_height):
-            for j in range(original_image_width):
-                sum = 0
-                for k in range(kernel_size):
-                    for l in range(kernel_size):
-                        sum += padded_image_array[k + i,l + j] * kernel[k,l]
-                filtered_image_array[i + kernel_size//2,j + kernel_size//2] = sum
-        subtracted_image_array = padded_image_array - filtered_image_array 
-        multiplied_image_array = subtracted_image_array * kFactor
-        added_image_array = multiplied_image_array + padded_image_array
-        # a = added_image_array - np.min(added_image_array)
-        # maxa = np.max(a)
-        # mina = np.min(a)
-        # final_image_array = (a/maxa) *255
-        # create a image from new array
-        final_image_array = np.clip(added_image_array,0,255)
-        unclipped_image = final_image_array[kernel_size//2:padded_image_height - kernel_size//2,kernel_size//2:padded_image_width - kernel_size//2]
-        filtered_image= Image.fromarray(np.uint8(unclipped_image))
-        # filtered_image.show()
-        # viewing filtered image
-        qqimg=filtered_image.toqpixmap()
-        self.filteredImage.clear()
-        self.filteredImage.setPixmap(qqimg)  
+            if magic.from_file(self.path) == 'DICOM medical imaging data' or magic.from_file(self.path)=='TIFF image data, little-endian':
+                    
+                ds = dicom.dcmread(self.path)
+                new= ds.pixel_array.astype(float)
+                scaled_image=(np.maximum(new, 0)/new.max())*255.0
+                
+                scaled_image=np.uint8(scaled_image)
+                original_image_array=np.asarray(scaled_image)
+                original_image_width= original_image_array.shape[1]
+                original_image_height= original_image_array.shape[0]
+                img=Image.fromarray(scaled_image)
+
+                
+            else:
+
+                # image original size
+                image=Image.open(self.path).convert('L') 
+                original_image_width=image.width
+                original_image_height=image.height
+                original_image_array=np.asarray(image)
+
+            # image padded size
+            padded_image_width=original_image_width + kernel_size -1
+            padded_image_height=original_image_height + kernel_size -1
+
+            # padded image
+            padded_image_array = np.zeros((padded_image_height, padded_image_width))
+            for i in range(kernel_size//2, original_image_height + kernel_size//2):
+                for j in range(kernel_size//2, original_image_width + kernel_size//2):
+                    padded_image_array[i][j] = original_image_array[i - kernel_size//2][j - kernel_size//2]
+            filtered_image_array = np.zeros((padded_image_height, padded_image_width))
+
+            # apply filter
+            for i in range(original_image_height):
+                for j in range(original_image_width):
+                    sum = 0
+                    for k in range(kernel_size):
+                        for l in range(kernel_size):
+                            sum += padded_image_array[k + i,l + j] * kernel[k,l]
+                    filtered_image_array[i + kernel_size//2,j + kernel_size//2] = sum
+            subtracted_image_array = padded_image_array - filtered_image_array 
+            multiplied_image_array = subtracted_image_array * kFactor
+            added_image_array = multiplied_image_array + padded_image_array
+            if (self.scaleRadioButton.isChecked()):
+                a = added_image_array - np.min(added_image_array)
+                maxa = np.max(a)
+                mina = np.min(a)
+                final_image_array = (a/maxa) *255
+            elif (self.clipRadioButton.isChecked()):
+                final_image_array = self.clip(added_image_array)
+            unclipped_image = final_image_array[kernel_size//2:padded_image_height - kernel_size//2,kernel_size//2:padded_image_width - kernel_size//2]
+            filtered_image= Image.fromarray(np.uint8(unclipped_image))
+            # filtered_image.show()
+            # viewing filtered image
+            qqimg=filtered_image.toqpixmap()
+            self.filteredImage.clear()
+            self.filteredImage.setPixmap(qqimg)  
+        except :                 #pop error message in case of error 
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("Error")
+            msg.setInformativeText('An error has occured!')
+            msg.setWindowTitle("Error")
+            msg.exec_()
+
+    def clip(self, image_array):
+        try:
+            for i in range(image_array.shape[0]):
+                for j in range(image_array.shape[1]):
+                    if image_array[i][j] < 0:
+                        image_array[i][j] = 0
+                    elif image_array[i][j] > 255:
+                        image_array[i][j] = 255
+            return image_array
+        except :                 #pop error message in case of error 
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("Error")
+            msg.setInformativeText('An error has occured!')
+            msg.setWindowTitle("Error")
+            msg.exec_()
     def median_filter(self):
-        # create kernel
-        kernel_size= self.kernelSize_median.value()
-        temp = []
-        # image original size
-        image=self.noisy_image
-        original_image_width=image.width
-        original_image_height=image.height
-        original_image_array=np.asarray(image)
-        # image padded size
-        padded_image_width=original_image_width + kernel_size -1
-        padded_image_height=image.height + kernel_size -1
-        # padded image
-        padded_image_array = np.pad(original_image_array, kernel_size//2)
-        filtered_image_array = np.zeros((padded_image_height, padded_image_width))
-        for i in range(original_image_height):
-            for j in range(original_image_width):
-                for k in range(kernel_size):
-                    for l in range(kernel_size):
-                       temp.append(padded_image_array[k + i,l + j])
-                mergeSort(temp)
-                filtered_image_array[i + kernel_size//2,j + kernel_size//2] = temp[len(temp) // 2]
-                temp = []
-        unclipped_image_array = filtered_image_array[kernel_size//2:padded_image_height - kernel_size//2,kernel_size//2:padded_image_width - kernel_size//2]
-        unclipped_image= Image.fromarray(np.uint8(unclipped_image_array))
-        # filtered_image.show()
-        # viewing filtered image
-        qqimg=unclipped_image.toqpixmap()
-        self.filteredImage.clear()
-        self.filteredImage.setPixmap(qqimg) 
+        try:
+            # create kernel
+            kernel_size= self.kernelSize_median.value()
+            temp = []
+
+            # image original size
+            image=self.noisy_image
+            original_image_width=image.width
+            original_image_height=image.height
+            original_image_array=np.asarray(image)
+            # image padded size
+            padded_image_width=original_image_width + kernel_size -1
+            padded_image_height=original_image_height + kernel_size -1
+            # padded image
+            padded_image_array = np.zeros((padded_image_height, padded_image_width))
+            for i in range(kernel_size//2, original_image_height + kernel_size//2):
+                for j in range(kernel_size//2, original_image_width + kernel_size//2):
+                    padded_image_array[i][j] = original_image_array[i - kernel_size//2][j - kernel_size//2]
+            filtered_image_array = np.zeros((padded_image_height, padded_image_width))
+            for i in range(original_image_height):
+                for j in range(original_image_width):
+                    for k in range(kernel_size):
+                        for l in range(kernel_size):
+                            temp.append(padded_image_array[k + i,l + j])
+                    mergeSort(temp)
+                    filtered_image_array[i + kernel_size//2,j + kernel_size//2] = temp[len(temp) // 2]
+                    temp = []
+            unclipped_image_array = filtered_image_array[kernel_size//2:padded_image_height - kernel_size//2,kernel_size//2:padded_image_width - kernel_size//2]
+            unclipped_image= Image.fromarray(np.uint8(unclipped_image_array))
+            # filtered_image.show()
+            # viewing filtered image
+            qqimg=unclipped_image.toqpixmap()
+            self.filteredImage.clear()
+            self.filteredImage.setPixmap(qqimg) 
+        except :                 #pop error message in case of error 
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("Error")
+            msg.setInformativeText('An error has occured!')
+            msg.setWindowTitle("Error")
+            msg.exec_()
     def add_noise(self):
-        image=Image.open(self.path).convert('L') 
-        original_image_width=image.width
-        original_image_height=image.height
-        original_image_array=np.asarray(image)
-        percent = self.noise_percent.value()
-        noisy_image_array = np.zeros((original_image_height, original_image_width))
-        number_of_pixels = int((percent/100)*original_image_width*original_image_height)
-        for i in range(original_image_height):
-            for j in range(original_image_width):
-                noisy_image_array[i][j] = original_image_array[i][j]
-        for i in range(number_of_pixels):
-            y_coord=random.randint(0, original_image_height - 1) 
-            x_coord=random.randint(0, original_image_width - 1)
-            noisy_image_array[y_coord][x_coord] = 255
-        for i in range(number_of_pixels):
-            y_coord=random.randint(0, original_image_height - 1)
-            x_coord=random.randint(0, original_image_width - 1)
-            noisy_image_array[y_coord][x_coord] = 0
-        self.noisy_image= Image.fromarray(np.uint8(noisy_image_array))
-        qqimg=self.noisy_image.toqpixmap()
-        self.unfilteredImage.clear()
-        self.unfilteredImage.setPixmap(qqimg) 
-        return noisy_image_array
+        try:
+
+            if magic.from_file(self.path) == 'DICOM medical imaging data' or magic.from_file(self.path)=='TIFF image data, little-endian':
+                    
+                ds = dicom.dcmread(self.path)
+                new= ds.pixel_array.astype(float)
+                scaled_image=(np.maximum(new, 0)/new.max())*255.0
+                
+                scaled_image=np.uint8(scaled_image)
+                original_image_array=np.asarray(scaled_image)
+                original_image_width= original_image_array.shape[1]
+                original_image_height= original_image_array.shape[0]
+                img=Image.fromarray(scaled_image)
+            else:
+                image=Image.open(self.path).convert('L') 
+                original_image_width=image.width
+                original_image_height=image.height
+                original_image_array=np.asarray(image)
+
+            percent = self.noise_percent.value()
+            noisy_image_array = np.zeros((original_image_height, original_image_width))
+            number_of_pixels = int((percent/200)*original_image_width*original_image_height)
+            for i in range(original_image_height):
+                for j in range(original_image_width):
+                    noisy_image_array[i][j] = original_image_array[i][j]
+            for i in range(number_of_pixels):
+                y_coord=random.randint(0, original_image_height - 1) 
+                x_coord=random.randint(0, original_image_width - 1)
+                noisy_image_array[y_coord][x_coord] = 255
+            for i in range(number_of_pixels):
+                y_coord=random.randint(0, original_image_height - 1)
+                x_coord=random.randint(0, original_image_width - 1)
+                noisy_image_array[y_coord][x_coord] = 0
+            self.noisy_image= Image.fromarray(np.uint8(noisy_image_array))
+            qqimg=self.noisy_image.toqpixmap()
+            self.unfilteredImage.clear()
+            self.unfilteredImage.setPixmap(qqimg) 
+            return noisy_image_array
+        except :                 #pop error message in case of error 
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("Error")
+            msg.setInformativeText('An error has occured!')
+            msg.setWindowTitle("Error")
+            msg.exec_()
         
-    # Python program for implementation of MergeSort
+   
 def mergeSort(arr):
 	if len(arr) > 1:
 
