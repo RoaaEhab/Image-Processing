@@ -801,6 +801,13 @@ class MainWindow(QtWidgets.QMainWindow):
             qqimg=filtered_image.toqpixmap()
             self.filteredImage.clear()
             self.filteredImage.setPixmap(qqimg)  
+            if kernel_size%2 ==0:
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Information)
+                msg.setText("Warning")
+                msg.setInformativeText('Using an even kernel size may result in a little shift in the image, we recommend using an odd kernel size.')
+                msg.setWindowTitle("Filter")
+                msg.exec_()
         except :                 #pop error message in case of error 
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Critical)
@@ -860,6 +867,13 @@ class MainWindow(QtWidgets.QMainWindow):
             qqimg=unclipped_image.toqpixmap()
             self.filteredImage.clear()
             self.filteredImage.setPixmap(qqimg) 
+            if kernel_size%2 ==0:
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Information)
+                msg.setText("Warning")
+                msg.setInformativeText('Using an even kernel size may result in a little shift in the image, we recommend using an odd kernel size.')
+                msg.setWindowTitle("Filter")
+                msg.exec_()
         except :                 #pop error message in case of error 
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Critical)
