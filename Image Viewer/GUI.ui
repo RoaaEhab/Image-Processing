@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>983</width>
+    <width>1205</width>
     <height>680</height>
    </rect>
   </property>
@@ -1158,6 +1158,9 @@ border-style: solid;
         <height>22</height>
        </rect>
       </property>
+      <property name="styleSheet">
+       <string notr="true">color: rgb(255, 255, 255);</string>
+      </property>
       <property name="minimum">
        <number>1</number>
       </property>
@@ -1315,6 +1318,9 @@ border-style: solid;
         <height>22</height>
        </rect>
       </property>
+      <property name="styleSheet">
+       <string notr="true">color: rgb(255, 255, 255);</string>
+      </property>
       <property name="minimum">
        <number>1</number>
       </property>
@@ -1361,7 +1367,7 @@ border-style: solid;
        <double>0.000000000000000</double>
       </property>
       <property name="maximum">
-       <double>500.000000000000000</double>
+       <double>100.000000000000000</double>
       </property>
      </widget>
      <widget class="QPushButton" name="add_noise_button">
@@ -1410,6 +1416,246 @@ border-style: solid;
        <string>Filter</string>
       </property>
      </widget>
+     <widget class="QRadioButton" name="scaleRadioButton">
+      <property name="geometry">
+       <rect>
+        <x>180</x>
+        <y>500</y>
+        <width>82</width>
+        <height>17</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">font: 75 9pt &quot;MS Shell Dlg 2&quot;;
+color: rgb(255, 255, 255);</string>
+      </property>
+      <property name="text">
+       <string>Scale</string>
+      </property>
+     </widget>
+     <widget class="QRadioButton" name="clipRadioButton">
+      <property name="geometry">
+       <rect>
+        <x>300</x>
+        <y>500</y>
+        <width>82</width>
+        <height>17</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">font: 75 9pt &quot;MS Shell Dlg 2&quot;;
+color: rgb(255, 255, 255);</string>
+      </property>
+      <property name="text">
+       <string>Clip</string>
+      </property>
+      <property name="checked">
+       <bool>true</bool>
+      </property>
+     </widget>
+    </widget>
+    <widget class="QWidget" name="tab_6">
+     <attribute name="title">
+      <string>Fourier Transform</string>
+     </attribute>
+     <widget class="QGraphicsView" name="origina_image_graphicsView">
+      <property name="geometry">
+       <rect>
+        <x>10</x>
+        <y>100</y>
+        <width>361</width>
+        <height>321</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">QGraphicsView{ border-width: 0px;
+border-style: solid;
+}</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_31">
+      <property name="geometry">
+       <rect>
+        <x>10</x>
+        <y>30</y>
+        <width>241</width>
+        <height>41</height>
+       </rect>
+      </property>
+      <property name="font">
+       <font>
+        <pointsize>20</pointsize>
+        <weight>75</weight>
+        <bold>true</bold>
+       </font>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">color: rgb(255, 255, 255);
+</string>
+      </property>
+      <property name="text">
+       <string>Image</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_32">
+      <property name="geometry">
+       <rect>
+        <x>480</x>
+        <y>20</y>
+        <width>241</width>
+        <height>21</height>
+       </rect>
+      </property>
+      <property name="font">
+       <font>
+        <pointsize>12</pointsize>
+        <weight>75</weight>
+        <bold>true</bold>
+       </font>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">color: rgb(255, 255, 255);</string>
+      </property>
+      <property name="text">
+       <string>Magnitude</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_33">
+      <property name="geometry">
+       <rect>
+        <x>830</x>
+        <y>20</y>
+        <width>241</width>
+        <height>21</height>
+       </rect>
+      </property>
+      <property name="font">
+       <font>
+        <pointsize>12</pointsize>
+        <weight>75</weight>
+        <bold>true</bold>
+       </font>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">color: rgb(255, 255, 255);</string>
+      </property>
+      <property name="text">
+       <string>Phase</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_34">
+      <property name="geometry">
+       <rect>
+        <x>830</x>
+        <y>330</y>
+        <width>241</width>
+        <height>21</height>
+       </rect>
+      </property>
+      <property name="font">
+       <font>
+        <pointsize>12</pointsize>
+        <weight>75</weight>
+        <bold>true</bold>
+       </font>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">color: rgb(255, 255, 255);</string>
+      </property>
+      <property name="text">
+       <string>Log Phase</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_35">
+      <property name="geometry">
+       <rect>
+        <x>480</x>
+        <y>330</y>
+        <width>241</width>
+        <height>21</height>
+       </rect>
+      </property>
+      <property name="font">
+       <font>
+        <pointsize>12</pointsize>
+        <weight>75</weight>
+        <bold>true</bold>
+       </font>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">color: rgb(255, 255, 255);</string>
+      </property>
+      <property name="text">
+       <string>Log Magnitude</string>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="transform_button">
+      <property name="geometry">
+       <rect>
+        <x>10</x>
+        <y>470</y>
+        <width>101</width>
+        <height>41</height>
+       </rect>
+      </property>
+      <property name="font">
+       <font>
+        <family>MS Shell Dlg 2</family>
+        <pointsize>12</pointsize>
+        <weight>50</weight>
+        <italic>false</italic>
+        <bold>false</bold>
+       </font>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">color: rgb(255, 255, 255);
+font: 12pt &quot;MS Shell Dlg 2&quot;;
+</string>
+      </property>
+      <property name="text">
+       <string>Transform</string>
+      </property>
+     </widget>
+     <widget class="MplWidget" name="magnitude" native="true">
+      <property name="geometry">
+       <rect>
+        <x>480</x>
+        <y>60</y>
+        <width>281</width>
+        <height>241</height>
+       </rect>
+      </property>
+     </widget>
+     <widget class="MplWidget" name="phase" native="true">
+      <property name="geometry">
+       <rect>
+        <x>830</x>
+        <y>60</y>
+        <width>281</width>
+        <height>241</height>
+       </rect>
+      </property>
+     </widget>
+     <widget class="MplWidget" name="log_magnitude" native="true">
+      <property name="geometry">
+       <rect>
+        <x>480</x>
+        <y>370</y>
+        <width>281</width>
+        <height>241</height>
+       </rect>
+      </property>
+     </widget>
+     <widget class="MplWidget" name="log_phase" native="true">
+      <property name="geometry">
+       <rect>
+        <x>830</x>
+        <y>370</y>
+        <width>281</width>
+        <height>241</height>
+       </rect>
+      </property>
+     </widget>
     </widget>
    </widget>
   </widget>
@@ -1418,7 +1664,7 @@ border-style: solid;
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>983</width>
+     <width>1205</width>
      <height>21</height>
     </rect>
    </property>
