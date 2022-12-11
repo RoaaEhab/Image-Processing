@@ -35,7 +35,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.filterButton.clicked.connect(self.filter)
         self.filterButton_median.clicked.connect(self.median_filter)
         self.add_noise_button.clicked.connect(self.add_noise)
-        self.transform_button.clicked.connect(self.fourier_transform)
+        self.transform_button.clicked.connect(self.fourier_open)
+        self.filterButton_fourier.clicked.connect(self.frequency_filter)
+        self.difference_button.clicked.connect(self.filter_difference)
+        self.remove_pattern_button.clicked.connect(self.denoising)
+        self.filtered_image.canvas.ax.axis('off')
+        self.image.canvas.ax.axis('off')
 
         # create origial t image
         t_array = np.zeros((128, 128))
@@ -92,9 +97,15 @@ class MainWindow(QtWidgets.QMainWindow):
 
             qqimg=(Image.open(self.path).convert('L')).toqpixmap()
             self.noisy_image = Image.open(self.path).convert('L')
-            self.unfilteredImage.clear()
-            self.filteredImage.clear()
-            self.unfilteredImage.setPixmap(qqimg) 
+            self.image.canvas.ax.clear()
+            self.image.canvas.ax.imshow(self.img_np, interpolation = "None", cmap="gray")
+            self.image.canvas.ax.axis('off')
+            self.image.canvas.draw()
+
+            self.magnitude.canvas.ax.clear()
+            self.phase.canvas.ax.clear()
+            self.log_magnitude.canvas.ax.clear()
+            self.log_phase.canvas.ax.clear() 
 
             # get number of channels
             if (len(self.img_np.shape)==2):
@@ -214,6 +225,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.unfilteredImage.clear()
         self.filteredImage.clear()
         self.unfilteredImage.setPixmap(qqimg) 
+
+        self.image.canvas.ax.clear()
+        self.image.canvas.ax.imshow(scaled_image, interpolation = "None", cmap="gray")
+        self.image.canvas.ax.axis('off')
+        self.image.canvas.draw()
         
     def nearest_neighbour_interpolation(self, path, factor):
         try:
@@ -975,57 +991,275 @@ class MainWindow(QtWidgets.QMainWindow):
             msg.setWindowTitle("Error")
             msg.exec_()
     
-    def fourier_transform(self):
-        if magic.from_file(self.path) == 'DICOM medical imaging data' or magic.from_file(self.path)=='TIFF image data, little-endian':
-                    
-            ds = dicom.dcmread(self.path)
-            new= ds.pixel_array.astype(float)
-            scaled_image=(np.maximum(new, 0)/new.max())*255.0
+    def zero_pad_kernel(self, kernel, image_array): 
+        try:
+            # image dimensions
+            img_height = image_array.shape[0]
+            img_width = image_array.shape[1]
+
+            # kernel dimensions
+            kernel_height = kernel.shape[0]
+            kernel_width = kernel.shape[1]
+
+            # padding dimensions
+            pad_width = int((img_width - kernel_width) / 2 )
+            pad_height = int((img_height - kernel_height) / 2)
+
+            # created new padded kernel array
+            padded_kernel = np.zeros((img_height, img_width)) 
+            for i in range(pad_height, kernel_height + pad_height):
+                for j in range(pad_width, kernel_width + pad_width):
+                    padded_kernel[i][j] = kernel[i - pad_height][j - pad_width] # inserting image data within the frame of the padding
+            return padded_kernel
+        except :                 #pop error message in case of error 
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("Error")
+            msg.setInformativeText('An error has occured!')
+            msg.setWindowTitle("Error")
+            msg.exec_()
+
+    def fourier_open(self):
+        try:
+            # to open dicom files
+            if magic.from_file(self.path) == 'DICOM medical imaging data' or magic.from_file(self.path)=='TIFF image data, little-endian':
+                        
+                ds = dicom.dcmread(self.path)
+                new= ds.pixel_array.astype(float)
+                scaled_image=(np.maximum(new, 0)/new.max())*255.0
+                
+                scaled_image=np.uint8(scaled_image)
+                original_image_array=np.asarray(scaled_image)
+
+            # open a gray scale image
+            elif self.channels==1 and Image.open(self.path).mode=='L':
+                image=Image.open(self.path)
+                original_image_array=np.asarray(image)
+            else:
+                image=Image.open(self.path).convert('L')
+                original_image_array=np.asarray(image)
+            fourier_shift = self.fourier_transform(original_image_array)
+
+            # get real and imaginary components
+            real_component = fourier_shift.real
+            imaginary_component = fourier_shift.imag
+
+            # calculate magnitude and phase
+            magnitude = np.sqrt((real_component ** 2) + (imaginary_component ** 2))
+            phase = np.arctan2(imaginary_component, real_component)
+
+            # apply log to the magnitude, while adding 1 to scale
+            log_magnitude = np.log(magnitude + 1)
+
+            # apply log to the phase, while adding 2pi to add another cycle making the range 0-2pi instead of -pi-pi, as no negative is allowed inside the log
+            log_phase = np.log(phase + 2*math.pi)
+
+            # plot magnitude
+            self.magnitude.canvas.ax.clear()
+            self.magnitude.canvas.ax.imshow(magnitude, interpolation = "None", cmap="gray")
+            self.magnitude.canvas.draw()
+
+            # plot phase
+            self.phase.canvas.ax.clear()
+            self.phase.canvas.ax.imshow(phase, interpolation = "None", cmap="gray")
+            self.phase.canvas.draw()
+
+            # plot magnitude after log
+            self.log_magnitude.canvas.ax.clear()
+            self.log_magnitude.canvas.ax.imshow(log_magnitude, interpolation = "None", cmap="gray")
+            self.log_magnitude.canvas.draw()
+
+            # plot phase after log
+            self.log_phase.canvas.ax.clear()
+            self.log_phase.canvas.ax.imshow(log_phase, interpolation = "None", cmap="gray")
+            self.log_phase.canvas.draw()
+        except :                 #pop error message in case of error 
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("Error")
+            msg.setInformativeText('An error has occured!')
+            msg.setWindowTitle("Error")
+            msg.exec_()
+
+    def fourier_transform(self, array):
+        try:
+            # apply fourier transform and fourier shift to the image array
+            fourier = np.fft.fft2(array)
+            fourier_shift = np.fft.fftshift(fourier)
             
-            scaled_image=np.uint8(scaled_image)
-            original_image_array=np.asarray(scaled_image)
-
-        elif self.channels==1 and Image.open(self.path).mode=='L':
-            image=Image.open(self.path)
-            original_image_array=np.asarray(image)
-        else:
-            image=Image.open(self.path).convert('L')
-            original_image_array=np.asarray(image)
+            return fourier_shift
+        except :                 #pop error message in case of error 
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("Error")
+            msg.setInformativeText('An error has occured!')
+            msg.setWindowTitle("Error")
+            msg.exec_()
         
-        fourier = np.fft.fft2(original_image_array)
-        fourier_shift = np.fft.fftshift(fourier)
-        real_component = fourier_shift.real
-        imaginary_component = fourier_shift.imag
-        magnitude = np.sqrt((real_component ** 2) + (imaginary_component ** 2))
-        phase = np.arctan2(imaginary_component, real_component)
-        log_magnitude = np.log(magnitude + 1)
-        log_phase = np.log(phase + 2*math.pi)
+    def frequency_filter(self): 
+        try:
+            # to open dicom files
+            if magic.from_file(self.path) == 'DICOM medical imaging data' or magic.from_file(self.path)=='TIFF image data, little-endian':
+                        
+                ds = dicom.dcmread(self.path)
+                new= ds.pixel_array.astype(float)
+                scaled_image=(np.maximum(new, 0)/new.max())*255.0
+                
+                scaled_image=np.uint8(scaled_image)
+                original_image_array=np.asarray(scaled_image)
 
-        self.magnitude.canvas.ax.clear()
-        self.magnitude.canvas.ax.imshow(magnitude, interpolation = "None", cmap="gray")
-        self.magnitude.canvas.draw()
+            # open a gray scale image
+            elif self.channels==1 and Image.open(self.path).mode=='L':
+                image=Image.open(self.path)
+                original_image_array=np.asarray(image)
+            else:
+                image=Image.open(self.path).convert('L')
+                original_image_array=np.asarray(image)
 
-        self.phase.canvas.ax.clear()
-        self.phase.canvas.ax.imshow(phase, interpolation = "None", cmap="gray")
-        self.phase.canvas.draw()
+            # create kernel
+            kernel_size= self.kernelSize_fourier.value()
+            kernel_value= 1/(kernel_size*kernel_size) 
+            kernel = np.full((kernel_size, kernel_size), kernel_value)  
 
-        self.log_magnitude.canvas.ax.clear()
-        self.log_magnitude.canvas.ax.imshow(log_magnitude, interpolation = "None", cmap="gray")
-        self.log_magnitude.canvas.draw()
+            # image original size
+            original_image_width=original_image_array.shape[1]
+            original_image_height=original_image_array.shape[0]
 
-        self.log_phase.canvas.ax.clear()
-        self.log_phase.canvas.ax.imshow(log_phase, interpolation = "None", cmap="gray")
-        self.log_phase.canvas.draw()
-        # plt.imshow(magnitude, "gray"), plt.title("mag")
-        # plt.show()
-        # plt.imshow(phase, "gray"), plt.title("phase")
-        # plt.show()
-        # plt.imshow(log_magnitude, "gray"), plt.title("log mag")
-        # plt.show()
-        # plt.imshow(log_phase, "gray"), plt.title("log phase")
-        # plt.show()
+            # padded kernel
+            padded_kernel = self.zero_pad_kernel(kernel, original_image_array)
+            
+            # apply fourier transform to both kernel and image
+            padded_kernel_fourier_shift = self.fourier_transform(padded_kernel)
+            image_fourier_shift = self.fourier_transform(original_image_array)
+            
+            # multiply kernel and image in frequency domain
+            output = padded_kernel_fourier_shift * image_fourier_shift
+            
+            # obtain the inverse fourier of the filtered image to restore it
+            output_1 = np.fft.ifftshift(output)
+            inverse_fourier_output = (np.fft.fftshift(np.fft.ifft2(output_1))).real
+            
+            # spatial domain filtering
+            # image padded size
+            padded_image_width=original_image_width + kernel_size -1
+            padded_image_height=original_image_height + kernel_size -1
 
-   
+            # padded image
+            padded_image_array = np.zeros((padded_image_height, padded_image_width))
+            for i in range(kernel_size//2, original_image_height + kernel_size//2):
+                for j in range(kernel_size//2, original_image_width + kernel_size//2):
+                    padded_image_array[i][j] = original_image_array[i - kernel_size//2][j - kernel_size//2]
+
+            # create array for new filtered padded image
+            filtered_image_array = np.zeros((padded_image_height, padded_image_width))
+
+            # apply filter
+            # looping over the original image with the kernel size replacing the centre of the box each time
+            for i in range(original_image_height):
+                for j in range(original_image_width):
+                    sum = 0
+                    for k in range(kernel_size):
+                        for l in range(kernel_size):
+                            # multiply the filter by the image pixel values for each box and add them 
+                            sum += padded_image_array[k + i,l + j] * kernel[k,l]
+                    # replace the box centre by the summation
+                    filtered_image_array[i + kernel_size//2,j + kernel_size//2] = sum
+            
+            spatial_filtered_image_array = filtered_image_array[kernel_size//2:padded_image_height - kernel_size//2,kernel_size//2:padded_image_width - kernel_size//2]
+        
+            # get difference between spatially filtered image and frequency filtered image
+            # clip the difference to eliminate the negative values
+            self.difference_array = self.clip(inverse_fourier_output - spatial_filtered_image_array)
+            
+            # show the desired filtered image upon the radio button selection
+            if (self.frequency_domain_RadioButton.isChecked()):
+                # view new image
+                self.filtered_image.canvas.ax.clear()
+                self.filtered_image.canvas.ax.imshow(self.clip(inverse_fourier_output), interpolation = "None", cmap="gray")
+                self.filtered_image.canvas.ax.axis('off')
+                self.filtered_image.canvas.draw() 
+
+            elif(self.spatial_domain_RadioButton.isChecked()):
+                # view new image
+                self.filtered_image.canvas.ax.clear()
+                self.filtered_image.canvas.ax.imshow(self.clip(spatial_filtered_image_array), interpolation = "None", cmap="gray")
+                self.filtered_image.canvas.ax.axis('off')
+                self.filtered_image.canvas.draw()
+        except :                 #pop error message in case of error 
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("Error")
+            msg.setInformativeText('An error has occured!')
+            msg.setWindowTitle("Error")
+            msg.exec_()
+
+    def filter_difference(self):
+        try:
+            # plot the difference image
+            self.filtered_image.canvas.ax.clear()
+            self.filtered_image.canvas.ax.imshow(self.difference_array, interpolation = "None", cmap="gray")
+            self.filtered_image.canvas.ax.axis('off')
+            self.filtered_image.canvas.draw()
+        except :                 #pop error message in case of error 
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("Error")
+            msg.setInformativeText('An error has occured!')
+            msg.setWindowTitle("Error")
+            msg.exec_()
+
+    def denoising(self):
+        try:
+            # image original size
+            image=Image.open(self.path).convert('L') 
+            original_image_width=image.width
+            original_image_height=image.height
+            original_image_array=np.asarray(image)
+            mask_array = np.full((original_image_height, original_image_width), 1)
+
+            # create the mask filter with black boxes covering the known noise coordinates in the fourier transform of the image with pattern
+            mask_array[474:500,316:335] =0
+            mask_array[479:490,374:391] =0
+            mask_array[564:575,319:337] =0
+            mask_array[556:575,376:398] =0
+            mask_array[443:452,323:330] =0
+            mask_array[440:447,378:388] =0
+            mask_array[607:614,326:332] =0
+            mask_array[604:610,381:387] =0
+
+            image_fourier_transform = self.fourier_transform(original_image_array)
+            real_component =  image_fourier_transform.real
+            imaginary_component =  image_fourier_transform.imag
+
+            # multiply the image and the mask in the frequency domain
+            denoised_image_array_fourier_transform = image_fourier_transform * mask_array
+
+            
+            # restore the image with inverse fourier
+            denoised_image_array = ((np.fft.ifft2(np.fft.ifftshift(denoised_image_array_fourier_transform))))
+
+            # plot the denoised image
+            real = denoised_image_array.real
+            imaginary = denoised_image_array.imag
+
+            denoised_image_magnitude = np.sqrt((real ** 2) + (imaginary ** 2))
+
+            self.filtered_image.canvas.ax.clear()
+            self.filtered_image.canvas.ax.imshow(denoised_image_magnitude, interpolation = "None", cmap="gray" )
+            self.filtered_image.canvas.ax.axis('off')
+            self.filtered_image.canvas.draw()
+        except :                 #pop error message in case of error 
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("Error")
+            msg.setInformativeText('An error has occured!')
+            msg.setWindowTitle("Error")
+            msg.exec_()
+        
+
+
+        
+
 def mergeSort(arr):
 	if len(arr) > 1:
 
